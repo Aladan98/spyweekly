@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SPY Debit Spread Analyzer - Volume Enhanced</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace; 
+            background: #111; 
+            color: #ddd; 
+            padding: 10px;
+            font-size: 12px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            background: #222;
+            border: 1px solid #444;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .controls {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        input, button { 
+            margin: 5px; 
+            padding: 6px 10px;
+            background: #222;
+            color: #ddd;
+            border: 1px solid #444;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        button {
+            background: #444;
+            cursor: pointer;
+        }
+        button:hover { background: #555; }
+        button:disabled { background: #333; color: #666; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: #1a1a1a;
+            margin-bottom: 15px;
+            font-size: 11px;
+        }
+        th, td { 
+            border: 1px solid #333; 
+            padding: 4px 6px; 
+            text-align: left;
+        }
+        th { 
+            background: #333; 
+            font-weight: bold;
+        }
+        .top-cluster { background: #2a2a2a; font-weight: bold; }
+        .bullish { color: #4f4; }
+        .bearish { color: #f44; }
+        .section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .forecast-card {
+            background: #222;
+            border: 1px solid #444;
+            padding: 15px;
+        }
+        .big-number {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 2px 0;
+            border-bottom: 1px solid #333;
+        }
+        .spread-calc {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>SPY DEBIT SPREAD ANALYZER - VOLUME ENHANCED</h1>
+        <p>Weekly & Monthly Analysis with Volume and Change % Intelligence</p>
+    </div>
+
+    <div class="controls">
+        <strong>CSV Format: Date, Price, Open, High, Low, Vol., Change %</strong><br><br>
+        <input type="file" id="csvFile" accept=".csv"/>
+        <input type="number" id="yearFilter" placeholder="Year (optional)">
+        <button onclick="analyzeData()">ANALYZE</button>
+        <button onclick="downloadCSV()">EXPORT CSV</button>
+        <div id="status" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="forecast-grid">
+        <div class="forecast-card">
+            <h3>WEEKLY FORECAST</h3>
+            <div id="weeklyForecast">No data analyzed yet...</div>
+        </div>
+        <div class="forecast-card">
+            <h3>MONTHLY FORECAST</h3>
+            <div id="monthlyForecast">No data analyzed yet...</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h3>WEEKLY CLUSTERS (Volume & Volatility Enhanced)</h3>
+        <div id="weeklyClusters">No data analyzed yet...</div>
+    </div>
+
+    <div class="section">
+        <h3>MONTHLY CLUSTERS (Volume & Volatility Enhanced)</h3>
+        <div id="monthlyClusters">No data analyzed yet...</div>
+    </div>
+</div>
+
+<script>
+let csvData = [];
+let weeklyAnalysis = [];
+let monthlyAnalysis = [];
+
+document.getElementById('csvFile').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+        parseCSV(evt.target.result);
+    };
+    reader.readAsText(file);
+});
+
+function parseCSV(csvText) {
+    const lines = csvText.trim().split('\n');
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+    
+    // Find indices for new format: Date, Price, Open, High, Low, Vol., Change %
+    const dateIdx = headers.findIndex(h => h.includes('date'));
+    const priceIdx = headers.findIndex(h => h.includes('price')); // Price = Close
+    const openIdx = headers.findIndex(h => h.includes('open'));
+    const highIdx = headers.findIndex(h => h.includes('high'));
+    const lowIdx = headers.findIndex(h => h.includes('low'));
+    const volIdx = headers.findIndex(h => h.includes('vol'));
+    const changeIdx = headers.findIndex(h => h.includes('change'));
+
+    if ([dateIdx, priceIdx, openIdx, highIdx, lowIdx].some(i => i === -1)) {
+        alert('CSV must have Date, Price, Open, High, Low columns');
+        return;
+    }
+
+    csvData = [];
+    for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim());
+        if (vals.length < 6) continue;
+
+        const volume = parseFloat((vals[volIdx] || '0').replace(/,/g, '')) || 0;
+        const changePercent = parseFloat((vals[changeIdx] || '0%').replace('%', '')) || 0;
+
+        const row = {
+            date: vals[dateIdx],
+            close: parseFloat(vals[priceIdx]), // Price is Close
+            open: parseFloat(vals[openIdx]),
+            high: parseFloat(vals[highIdx]),
+            low: parseFloat(vals[lowIdx]),
+            volume: volume,
+            changePercent: changePercent,
+            dateObj: new Date(vals[dateIdx])
+        };
+
+        if (!isNaN(row.open) && !isNaN(row.high) && !isNaN(row.low) && !isNaN(row.close)) {
+            row.dailyAvg = (row.open + row.high + row.low + row.close) / 4;
+            csvData.push(row);
+        }
+    }
+    
+    csvData.sort((a, b) => a.dateObj - b.dateObj);
+    document.getElementById('status').innerHTML = `Loaded ${csvData.length} data points. Ready to analyze.`;
+}
+
+function analyzeData() {
+    if (csvData.length === 0) {
+        alert('Load CSV data first!');
+        return;
+    }
+
+    const yearFilter = document.getElementById('yearFilter').value;
+    let data = csvData;
+    if (yearFilter) {
+        data = csvData.filter(d => d.dateObj.getFullYear() === parseInt(yearFilter));
+    }
+
+    if (data.length === 0) {
+        alert('No data for specified year');
+        return;
+    }
+
+    // Weekly analysis
+    const weeklyGroups = groupByWeek(data);
+    weeklyAnalysis = analyzeTimeframe(weeklyGroups, 1); // $1 clusters
+
+    // Monthly analysis  
+    const monthlyGroups = groupByMonth(data);
+    monthlyAnalysis = analyzeTimeframe(monthlyGroups, 1);
+
+    displayResults();
+    document.getElementById('status').innerHTML = `Analysis complete. ${weeklyAnalysis.length} weekly clusters, ${monthlyAnalysis.length} monthly clusters.`;
+}
+
+function groupByWeek(data) {
+    const weeks = {};
+    data.forEach(d => {
+        const weekKey = getWeekKey(d.dateObj);
+        if (!weeks[weekKey]) weeks[weekKey] = [];
+        weeks[weekKey].push(d);
+    });
+    return Object.values(weeks);
+}
+
+function groupByMonth(data) {
+    const months = {};
+    data.forEach(d => {
+        const monthKey = `${d.dateObj.getFullYear()}-${d.dateObj.getMonth() + 1}`;
+        if (!months[monthKey]) months[monthKey] = [];
+        months[monthKey].push(d);
+    });
+    return Object.values(months);
+}
+
+function getWeekKey(date) {
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${weekNum}`;
+}
+
+function analyzeTimeframe(groupedData, clusterSize) {
+    const clusters = {};
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const recentDays = 7; // Number of days considered "recent"
+
+    groupedData.forEach(periodData => {
+        periodData.forEach(d => {
+            // Make cluster finer to capture recent spikes
+            const cluster = Math.round(d.dailyAvg / clusterSize) * clusterSize;
+
+            if (!clusters[cluster]) {
+                clusters[cluster] = {
+                    cluster: cluster,
+                    count: 0,
+                    up: 0,
+                    down: 0,
+                    volumes: [],
+                    changePercents: [],
+                    highs: [],
+                    lows: [],
+                    closes: [],
+                    history: []
+                };
+            }
+
+            clusters[cluster].count++;
+            clusters[cluster].history.push(d);
+            clusters[cluster].volumes.push(d.volume);
+            clusters[cluster].changePercents.push(Math.abs(d.changePercent));
+            clusters[cluster].highs.push(d.high);
+            clusters[cluster].lows.push(d.low);
+            clusters[cluster].closes.push(d.close);
+
+            if (d.close > d.open) clusters[cluster].up++;
+            else clusters[cluster].down++;
+        });
+    });
+
+    Object.values(clusters).forEach(cluster => {
+        cluster.upPct = (cluster.up / cluster.count) * 100;
+        cluster.avgVolume = cluster.volumes.reduce((a, b) => a + b, 0) / cluster.count;
+        cluster.avgChangePercent = cluster.changePercents.reduce((a, b) => a + b, 0) / cluster.count;
+
+        cluster.probableHigh = percentile(cluster.highs, 0.75);
+        cluster.probableLow = percentile(cluster.lows, 0.25);
+        cluster.median = percentile(cluster.closes, 0.5);
+
+        // NEW: Boost recent data
+        const now = new Date();
+        const recentHistory = cluster.history.filter(d => (now - d.dateObj) / 86400000 <= recentDays);
+        const recentWeight = 1 + (recentHistory.length / cluster.count) * 3; // Up to 4x weight for recent spikes
+
+        // Volume & volatility factors
+        const volumeFactor = Math.min(2, cluster.avgVolume / 50000000);
+        const volatilityFactor = Math.min(2, cluster.avgChangePercent / 2);
+
+        // Current month weighting
+        const currentMonthCount = cluster.history.filter(d =>
+            d.dateObj.getMonth() === currentMonth && d.dateObj.getFullYear() === currentYear
+        ).length;
+        const monthlyWeightFactor = currentMonthCount > 0 ? 1 + (currentMonthCount / cluster.count) : 1;
+
+        // FINAL weighted score
+        cluster.weightedScore = cluster.count * (cluster.upPct / 100) * volumeFactor * volatilityFactor * monthlyWeightFactor * recentWeight;
+    });
+
+    return Object.values(clusters)
+        .sort((a, b) => b.weightedScore - a.weightedScore)
+        .slice(0, 15);
+}
+
+
+function percentile(arr, p) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const index = p * (sorted.length - 1);
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    const weight = index % 1;
+    
+    if (upper >= sorted.length) return sorted[sorted.length - 1];
+    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+function displayResults() {
+    const lastClose = csvData[csvData.length - 1].close;
+    
+    // Weekly forecast
+    if (weeklyAnalysis.length > 0) {
+        const topWeekly = weeklyAnalysis[0];
+        const weeklyDirection = topWeekly.median > lastClose ? 'BULLISH' : 'BEARISH';
+        const weeklyConfidence = Math.min(95, topWeekly.weightedScore * 2);
+        
+        document.getElementById('weeklyForecast').innerHTML = `
+            <div class="big-number ${weeklyDirection.toLowerCase()}">${weeklyDirection}</div>
+            <div class="data-row"><span>Median Target:</span><span>$${topWeekly.median.toFixed(0)}</span></div>
+            <div class="data-row"><span>Probable High:</span><span class="bullish">$${topWeekly.probableHigh.toFixed(0)}</span></div>
+            <div class="data-row"><span>Probable Low:</span><span class="bearish">$${topWeekly.probableLow.toFixed(0)}</span></div>
+            <div class="data-row"><span>Confidence:</span><span>${weeklyConfidence.toFixed(0)}%</span></div>
+            <div class="spread-calc">
+                <strong>SUGGESTED SPREAD:</strong><br>
+                ${weeklyDirection === 'BULLISH' ? 
+                    `Buy ${Math.round(lastClose)} Call / Sell ${Math.round(topWeekly.probableHigh)} Call` : 
+                    `Buy ${Math.round(lastClose)} Put / Sell ${Math.round(topWeekly.probableLow)} Put`}
+            </div>
+        `;
+    }
+    
+    // Monthly forecast
+    if (monthlyAnalysis.length > 0) {
+        const topMonthly = monthlyAnalysis[0];
+        const monthlyDirection = topMonthly.median > lastClose ? 'BULLISH' : 'BEARISH';
+        const monthlyConfidence = Math.min(95, topMonthly.weightedScore * 2);
+        
+        document.getElementById('monthlyForecast').innerHTML = `
+            <div class="big-number ${monthlyDirection.toLowerCase()}">${monthlyDirection}</div>
+            <div class="data-row"><span>Median Target:</span><span>$${topMonthly.median.toFixed(0)}</span></div>
+            <div class="data-row"><span>Probable High:</span><span class="bullish">$${topMonthly.probableHigh.toFixed(0)}</span></div>
+            <div class="data-row"><span>Probable Low:</span><span class="bearish">$${topMonthly.probableLow.toFixed(0)}</span></div>
+            <div class="data-row"><span>Confidence:</span><span>${monthlyConfidence.toFixed(0)}%</span></div>
+            <div class="spread-calc">
+                <strong>SUGGESTED SPREAD:</strong><br>
+                ${monthlyDirection === 'BULLISH' ? 
+                    `Buy ${Math.round(lastClose)} Call / Sell ${Math.round(topMonthly.probableHigh)} Call` : 
+                    `Buy ${Math.round(lastClose)} Put / Sell ${Math.round(topMonthly.probableLow)} Put`}
+            </div>
+        `;
+    }
+    
+    // Weekly clusters table
+    let weeklyHtml = generateClusterTable(weeklyAnalysis);
+    document.getElementById('weeklyClusters').innerHTML = weeklyHtml;
+    
+    // Monthly clusters table
+    let monthlyHtml = generateClusterTable(monthlyAnalysis);
+    document.getElementById('monthlyClusters').innerHTML = monthlyHtml;
+}
+
+function generateClusterTable(clusters) {
+    if (clusters.length === 0) return 'No clusters found.';
+    
+    let html = `<table>
+        <tr>
+            <th>Cluster ($)</th>
+            <th>Count</th>
+            <th>Success %</th>
+            <th>Avg Vol (M)</th>
+            <th>Avg Change %</th>
+            <th>High/Low</th>
+            <th>Score</th>
+        </tr>`;
+    
+    clusters.forEach((cluster, i) => {
+        const isTop = i === 0;
+        const isBullish = cluster.upPct > 50;
+        const rowClass = isTop ? 'top-cluster' : '';
+        
+        html += `<tr class="${rowClass}">
+            <td>$${cluster.cluster.toFixed(0)} ${isTop ? '(TOP)' : ''}</td>
+            <td>${cluster.count}</td>
+            <td class="${isBullish ? 'bullish' : 'bearish'}">${cluster.upPct.toFixed(0)}%</td>
+            <td>${(cluster.avgVolume / 1000000).toFixed(0)}M</td>
+            <td>${cluster.avgChangePercent.toFixed(1)}%</td>
+            <td><span class="bullish">$${cluster.probableHigh.toFixed(0)}</span> / <span class="bearish">$${cluster.probableLow.toFixed(0)}</span></td>
+            <td>${cluster.weightedScore.toFixed(0)}</td>
+        </tr>`;
+    });
+    
+    html += '</table>';
+    html += '<div style="font-size: 10px; margin-top: 10px; color: #888;">';
+    html += '<strong>Score factors:</strong> Volume (liquidity) + Volatility (premium) + Current month weighting + Success rate<br>';
+    html += '<strong>Higher scores = better strike selection confidence</strong>';
+    html += '</div>';
+    
+    return html;
+}
+
+function downloadCSV() {
+    if (weeklyAnalysis.length === 0 && monthlyAnalysis.length === 0) {
+        alert('No analysis data to export');
+        return;
+    }
+    
+    let csv = 'Timeframe,Cluster,Count,SuccessRate,AvgVolume,AvgChangePercent,ProbableHigh,ProbableLow,Median,WeightedScore\n';
+    
+    weeklyAnalysis.forEach(c => {
+        csv += `Weekly,${c.cluster},${c.count},${c.upPct.toFixed(1)}%,${c.avgVolume.toFixed(0)},${c.avgChangePercent.toFixed(2)}%,${c.probableHigh.toFixed(2)},${c.probableLow.toFixed(2)},${c.median.toFixed(2)},${c.weightedScore.toFixed(2)}\n`;
+    });
+    
+    monthlyAnalysis.forEach(c => {
+        csv += `Monthly,${c.cluster},${c.count},${c.upPct.toFixed(1)}%,${c.avgVolume.toFixed(0)},${c.avgChangePercent.toFixed(2)}%,${c.probableHigh.toFixed(2)},${c.probableLow.toFixed(2)},${c.median.toFixed(2)},${c.weightedScore.toFixed(2)}\n`;
+    });
+    
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'SPY_Volume_Enhanced_Analysis.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
