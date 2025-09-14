@@ -262,7 +262,6 @@ function analyzeTimeframe(groupedData, clusterSize) {
 
     groupedData.forEach(periodData => {
         periodData.forEach(d => {
-            // Make cluster finer to capture recent spikes
             const cluster = Math.round(d.dailyAvg / clusterSize) * clusterSize;
 
             if (!clusters[cluster]) {
@@ -302,29 +301,30 @@ function analyzeTimeframe(groupedData, clusterSize) {
         cluster.probableLow = percentile(cluster.lows, 0.25);
         cluster.median = percentile(cluster.closes, 0.5);
 
-        // NEW: Boost recent data
+        // Recent history boost
         const now = new Date();
         const recentHistory = cluster.history.filter(d => (now - d.dateObj) / 86400000 <= recentDays);
-        const recentWeight = 1 + (recentHistory.length / cluster.count) * 3; // Up to 4x weight for recent spikes
+        const recentWeight = 1 + (recentHistory.length / cluster.count) * 3; // Up to 4x for recent spikes
 
-        // Volume & volatility factors
-        const volumeFactor = Math.min(2, cluster.avgVolume / 50000000);
-        const volatilityFactor = Math.min(2, cluster.avgChangePercent / 2);
+        // Volume & volatility factors with minimum floors
+        const volumeFactor = 0.1 + Math.min(2, cluster.avgVolume / 50000000); // add 0.1 floor
+        const volatilityFactor = 0.1 + Math.min(2, cluster.avgChangePercent / 2); // add 0.1 floor
 
         // Current month weighting
         const currentMonthCount = cluster.history.filter(d =>
             d.dateObj.getMonth() === currentMonth && d.dateObj.getFullYear() === currentYear
         ).length;
-        const monthlyWeightFactor = currentMonthCount > 0 ? 1 + (currentMonthCount / cluster.count) : 1;
+        const monthlyWeightFactor = 1 + (currentMonthCount / cluster.count); // at least 1
 
-        // FINAL weighted score
-        cluster.weightedScore = cluster.count * (cluster.upPct / 100) * volumeFactor * volatilityFactor * monthlyWeightFactor * recentWeight;
+        // Final weighted score with a minimum floor
+        cluster.weightedScore = Math.max(1, cluster.count * (cluster.upPct / 100) * volumeFactor * volatilityFactor * monthlyWeightFactor * recentWeight);
     });
 
     return Object.values(clusters)
         .sort((a, b) => b.weightedScore - a.weightedScore)
         .slice(0, 15);
 }
+
 
 
 function percentile(arr, p) {
