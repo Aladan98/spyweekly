@@ -362,8 +362,10 @@ function displayResults() {
             <div class="data-row"><span>Probable Low:</span><span class="bearish">$${topWeekly.probableLow.toFixed(0)}</span></div>
             <div class="data-row"><span>Confidence:</span><span>${weeklyConfidence.toFixed(0)}%</span></div>
             <div class="spread-calc">
-                <strong>SUGGESTED TRADE:</strong><br>
-                ${getSuggestedTrade(topWeekly, lastClose)}
+                <strong>SUGGESTED SPREAD:</strong><br>
+                ${weeklyDirection === 'BULLISH' ? 
+                    `Buy ${Math.round(lastClose)} Call / Sell ${Math.round(topWeekly.probableHigh)} Call` : 
+                    `Buy ${Math.round(lastClose)} Put / Sell ${Math.round(topWeekly.probableLow)} Put`}
             </div>
         `;
     }
@@ -381,8 +383,10 @@ function displayResults() {
             <div class="data-row"><span>Probable Low:</span><span class="bearish">$${topMonthly.probableLow.toFixed(0)}</span></div>
             <div class="data-row"><span>Confidence:</span><span>${monthlyConfidence.toFixed(0)}%</span></div>
             <div class="spread-calc">
-                <strong>SUGGESTED TRADE:</strong><br>
-                ${getSuggestedTrade(topMonthly, lastClose)}
+                <strong>SUGGESTED SPREAD:</strong><br>
+                ${monthlyDirection === 'BULLISH' ? 
+                    `Buy ${Math.round(lastClose)} Call / Sell ${Math.round(topMonthly.probableHigh)} Call` : 
+                    `Buy ${Math.round(lastClose)} Put / Sell ${Math.round(topMonthly.probableLow)} Put`}
             </div>
         `;
     }
@@ -395,7 +399,6 @@ function displayResults() {
     let monthlyHtml = generateClusterTable(monthlyAnalysis);
     document.getElementById('monthlyClusters').innerHTML = monthlyHtml;
 }
-
 
 function generateClusterTable(clusters) {
     if (clusters.length === 0) return 'No clusters found.';
@@ -416,13 +419,8 @@ function generateClusterTable(clusters) {
         const isBullish = cluster.upPct > 50;
         const rowClass = isTop ? 'top-cluster' : '';
         
-        // Iron Fly label if tight-range and high-confidence
-        const ironFlyLabel = (cluster.probableHigh - cluster.probableLow <= 2 && cluster.confidence >= 70) ? ' 🟢 Iron Fly' : '';
-        
         html += `<tr class="${rowClass}">
-            <td>
-                $${cluster.cluster.toFixed(0)} ${isTop ? '(TOP)' : ''}${ironFlyLabel}
-            </td>
+            <td>$${cluster.cluster.toFixed(0)} ${isTop ? '(TOP)' : ''}</td>
             <td>${cluster.count}</td>
             <td class="${isBullish ? 'bullish' : 'bearish'}">${cluster.upPct.toFixed(0)}%</td>
             <td>${(cluster.avgVolume / 1000000).toFixed(0)}M</td>
@@ -440,34 +438,6 @@ function generateClusterTable(clusters) {
     
     return html;
 }
-
-
-    function getSuggestedTrade(cluster, currentPrice) {
-    const tightRangeThreshold = 2; // $2 range, adjust as needed
-    const highConfidenceThreshold = 70; // Confidence > 70%
-
-    const range = cluster.probableHigh - cluster.probableLow;
-
-    if (range <= tightRangeThreshold && cluster.confidence >= highConfidenceThreshold) {
-        // Tight-range, high-confidence → Iron Fly
-        return `
-            Iron Fly:<br>
-            Sell Call & Put at $${Math.round(cluster.median)}<br>
-            Buy Call at $${Math.round(cluster.probableHigh)}<br>
-            Buy Put at $${Math.round(cluster.probableLow)}
-        `;
-    } else {
-        // Default to debit spread
-        const direction = cluster.median > currentPrice ? 'Call' : 'Put';
-        const shortStrike = cluster.median > currentPrice ? cluster.probableHigh : cluster.probableLow;
-        return `
-            Debit Spread:<br>
-            Buy ${direction} at $${Math.round(currentPrice)}<br>
-            Sell ${direction} at $${Math.round(shortStrike)}
-        `;
-    }
-}
-
 
 function downloadCSV() {
     if (weeklyAnalysis.length === 0 && monthlyAnalysis.length === 0) {
