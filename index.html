@@ -487,9 +487,10 @@ function getSuggestedTrade(cluster, currentPrice) {
             return `Credit Spread:<br>Sell Call at $${sellStrike}<br>Buy Call at $${buyStrike}`;
         }
     } else {
-        // Bearish → Put Spread
-        const sellStrike = roundToStrike(currentPrice);
-        let buyStrike = roundToStrike(sellStrike - spreadWidth);
+      // Bearish → Put Spread
+          const sellStrike = Math.round(Math.min(currentPrice - 1, cluster.median + 5));
+          const buyStrike = shortStrike - spreadWidth;
+
         if (buyStrike < 0) buyStrike = 0; // Avoid negative strikes
         if (tradeMode === 'debit') {
             return `Debit Spread:<br>Buy Put at $${buyStrike}<br>Sell Put at $${sellStrike}`;
