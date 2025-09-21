@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SPY Debit Spread Analyzer - Volume Enhanced</title>
+    <title>Option Credit Spread Analyzer </title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -100,7 +100,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>SPY DEBIT SPREAD ANALYZER - VOLUME ENHANCED</h1>
+        <h1>OPTION CREDIT SPREAD ANALYZER </h1>
         <p>Weekly & Monthly Analysis with Volume and Change % Intelligence</p>
     </div>
 
@@ -139,6 +139,12 @@
 let csvData = [];
 let weeklyAnalysis = [];
 let monthlyAnalysis = [];
+
+    // === CONFIGURABLE PARAMETERS ===
+const clusterSize = 5;          // Cluster size in $ (adjust per stock price)
+const tradeMode = 'debit';      // 'debit' or 'credit'
+const highConfidenceThreshold = 65; // % confidence for Iron Fly
+
 
 document.getElementById('csvFile').addEventListener('change', e => {
     const file = e.target.files[0];
@@ -216,11 +222,11 @@ function analyzeData() {
 
     // Weekly analysis
     const weeklyGroups = groupByWeek(data);
-    weeklyAnalysis = analyzeTimeframe(weeklyGroups, 1); // $1 clusters
+   weeklyAnalysis = analyzeTimeframe(weeklyGroups, clusterSize);
 
     // Monthly analysis  
     const monthlyGroups = groupByMonth(data);
-    monthlyAnalysis = analyzeTimeframe(monthlyGroups, 1);
+   monthlyAnalysis = analyzeTimeframe(monthlyGroups, clusterSize);
 
     displayResults();
     document.getElementById('status').innerHTML = `Analysis complete. ${weeklyAnalysis.length} weekly clusters, ${monthlyAnalysis.length} monthly clusters.`;
@@ -417,7 +423,8 @@ function generateClusterTable(clusters) {
         const rowClass = isTop ? 'top-cluster' : '';
         
         // Iron Fly label if tight-range and high-confidence
-        const ironFlyLabel = (cluster.probableHigh - cluster.probableLow <= 2 && cluster.confidence >= 65) ? ' 🟢 Iron Fly' : '';
+        const ironFlyLabel = (cluster.probableHigh - cluster.probableLow <= clusterSize * 0.4 && cluster.confidence >= highConfidenceThreshold) ? ' 🟢 Iron Fly' : '';
+
         
         html += `<tr class="${rowClass}">
             <td>
@@ -442,10 +449,9 @@ function generateClusterTable(clusters) {
 }
 
 
-    function getSuggestedTrade(cluster, currentPrice) {
-    const tightRangeThreshold = 2; // $2 range, adjust as needed
-    const highConfidenceThreshold = 65; // Confidence > 65%
-
+   function getSuggestedTrade(cluster, currentPrice) {
+    const tightRangeThreshold = clusterSize * 0.4; // Dynamic tight-range
+    
     const range = cluster.probableHigh - cluster.probableLow;
 
     if (range <= tightRangeThreshold && cluster.confidence >= highConfidenceThreshold) {
@@ -457,16 +463,25 @@ function generateClusterTable(clusters) {
             Buy Put at $${Math.round(cluster.probableLow)}
         `;
     } else {
-        // Default to debit spread
         const direction = cluster.median > currentPrice ? 'Call' : 'Put';
         const shortStrike = cluster.median > currentPrice ? cluster.probableHigh : cluster.probableLow;
-        return `
-            Debit Spread:<br>
-            Buy ${direction} at $${Math.round(currentPrice)}<br>
-            Sell ${direction} at $${Math.round(shortStrike)}
-        `;
+
+        if (tradeMode === 'debit') {
+            return `
+                Debit Spread:<br>
+                Buy ${direction} at $${Math.round(currentPrice)}<br>
+                Sell ${direction} at $${Math.round(shortStrike)}
+            `;
+        } else {
+            return `
+                Credit Spread:<br>
+                Sell ${direction} at $${Math.round(currentPrice)}<br>
+                Buy ${direction} at $${Math.round(shortStrike)}
+            `;
+        }
     }
 }
+
 
 
 function downloadCSV() {
