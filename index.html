@@ -142,7 +142,7 @@ let monthlyAnalysis = [];
 
     // === CONFIGURABLE PARAMETERS ===
 const clusterSize = 5;          // Cluster size in $ (adjust per stock price)
-const tradeMode = 'debit';      // 'debit' or 'credit'
+const tradeMode = 'credit';      // 'debit' or 'credit'
 const highConfidenceThreshold = 65; // % confidence for Iron Fly
 
 
@@ -449,39 +449,55 @@ function generateClusterTable(clusters) {
 }
 
 
-   function getSuggestedTrade(cluster, currentPrice) {
-    const tightRangeThreshold = clusterSize * 0.4; // Dynamic tight-range
-    
+function getSuggestedTrade(cluster, currentPrice) {
+    const tightRangeThreshold = clusterSize * 0.4;
+    const minSpread = 2;   // minimum $2 spread
+    const maxSpread = 10;  // maximum $10 spread
+
     const range = cluster.probableHigh - cluster.probableLow;
 
+    // Snap price to nearest 5 for option strike
+    function roundToStrike(price) {
+        return Math.round(price / 5) * 5;
+    }
+
+    // Dynamic spread width based on confidence (higher confidence → tighter)
+    const spreadWidth = roundToStrike(
+        Math.max(minSpread, Math.min(maxSpread, maxSpread - ((cluster.confidence - 10) / 85) * (maxSpread - minSpread)))
+    );
+
+    // Iron Fly if tight-range + confident
     if (range <= tightRangeThreshold && cluster.confidence >= highConfidenceThreshold) {
-        // Tight-range, high-confidence → Iron Fly
         return `
             Iron Fly:<br>
-            Sell Call & Put at $${Math.round(cluster.median)}<br>
-            Buy Call at $${Math.round(cluster.probableHigh)}<br>
-            Buy Put at $${Math.round(cluster.probableLow)}
+            Sell Call & Put at $${roundToStrike(cluster.median)}<br>
+            Buy Call at $${roundToStrike(cluster.probableHigh)}<br>
+            Buy Put at $${roundToStrike(cluster.probableLow)}
         `;
-    } else {
-        const direction = cluster.median > currentPrice ? 'Call' : 'Put';
-        const shortStrike = cluster.median > currentPrice ? cluster.probableHigh : cluster.probableLow;
+    }
 
+    // Determine direction based on median vs current price
+    if (cluster.median > currentPrice) {
+        // Bullish → Call Spread
+        const sellStrike = roundToStrike(currentPrice);
+        const buyStrike = roundToStrike(sellStrike + spreadWidth);
         if (tradeMode === 'debit') {
-            return `
-                Debit Spread:<br>
-                Buy ${direction} at $${Math.round(currentPrice)}<br>
-                Sell ${direction} at $${Math.round(shortStrike)}
-            `;
+            return `Debit Spread:<br>Buy Call at $${buyStrike}<br>Sell Call at $${sellStrike}`;
         } else {
-            return `
-                Credit Spread:<br>
-                Sell ${direction} at $${Math.round(currentPrice)}<br>
-                Buy ${direction} at $${Math.round(shortStrike)}
-            `;
+            return `Credit Spread:<br>Sell Call at $${sellStrike}<br>Buy Call at $${buyStrike}`;
+        }
+    } else {
+        // Bearish → Put Spread
+        const sellStrike = roundToStrike(currentPrice);
+        let buyStrike = roundToStrike(sellStrike - spreadWidth);
+        if (buyStrike < 0) buyStrike = 0; // Avoid negative strikes
+        if (tradeMode === 'debit') {
+            return `Debit Spread:<br>Buy Put at $${buyStrike}<br>Sell Put at $${sellStrike}`;
+        } else {
+            return `Credit Spread:<br>Sell Put at $${sellStrike}<br>Buy Put at $${buyStrike}`;
         }
     }
 }
-
 
 
 function downloadCSV() {
