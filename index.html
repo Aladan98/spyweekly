@@ -489,7 +489,7 @@ function getSuggestedTrade(cluster, currentPrice) {
     } else {
       // Bearish → Put Spread
           const sellStrike = Math.round(Math.min(currentPrice - 1, cluster.median + 5));
-          const buyStrike = shortStrike - spreadWidth;
+          const buyStrike = sellStrike - spreadWidth;
 
         if (buyStrike < 0) buyStrike = 0; // Avoid negative strikes
         if (tradeMode === 'debit') {
